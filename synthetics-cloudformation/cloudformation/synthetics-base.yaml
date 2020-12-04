@@ -1,0 +1,104 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Resources:
+  CloudWatchSyntheticsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        Fn::Sub: CloudWatchSyntheticsRole-${AWS::Region}
+      Description: CloudWatch Synthetics lambda execution role for running canaries
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+            Condition: {}
+
+  RolePermissions:
+    Type: AWS::IAM::Policy
+    Properties:
+      Roles:
+        - Ref: CloudWatchSyntheticsRole
+      PolicyName:
+        Fn::Sub: CloudWatchSyntheticsPolicy-${AWS::Region}
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - s3:PutObject
+              - s3:GetBucketLocation
+            Resource:
+              - Fn::Sub: arn:aws:s3:::${ResultsBucket}/*
+          - Effect: Allow
+            Action:
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+              - logs:CreateLogGroup
+            Resource: '*'
+          - Effect: Allow
+            Action:
+              - s3:ListAllMyBuckets
+            Resource: '*'
+          - Effect: Allow
+            Resource: '*'
+            Action: cloudwatch:PutMetricData
+            Condition:
+              StringEquals:
+                cloudwatch:namespace: CloudWatchSynthetics
+
+  ResultsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName:
+        Fn::Sub: cw-syn-results-${AWS::AccountId}-${AWS::Region}
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+  CodeBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName:
+        Fn::Sub: cw-syn-code-${AWS::AccountId}-${AWS::Region}
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - ExpirationInDays: 180
+            Status: Enabled
+
+Outputs:
+  CloudWatchSyntheticsRoleArn:
+    Value:
+      Fn::GetAtt:
+        - CloudWatchSyntheticsRole
+        - Arn
+    Export:
+      Name: synthetics-base:synthetics-role-arn
+  CodeBucketArn:
+    Value:
+      Fn::GetAtt:
+        - CodeBucket
+        - Arn
+    Export:
+      Name: synthetics-base:code-bucket-arn
+  ResultsBucketArn:
+    Value:
+      Fn::GetAtt:
+        - ResultsBucket
+        - Arn
+    Export:
+      Name: synthetics-base:results-bucket-arn
+  ResultsBucketName:
+    Value:
+      Ref: ResultsBucket
+    Export:
+      Name: synthetics-base:results-bucket-name

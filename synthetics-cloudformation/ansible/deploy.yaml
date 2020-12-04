@@ -1,0 +1,62 @@
+---
+- name: Deploy CloudFormation resources
+  hosts: localhost
+  connection: local
+  tasks:
+    - name: Get AWS account ID
+      command: aws sts get-caller-identity
+      register: get_caller_identity_result
+
+    - name: Store AWS account ID
+      set_fact:
+        aws_account_id: "{{ (get_caller_identity_result.stdout | from_json)['Account'] }}"
+
+    - name: Common AWS Synthetics resources
+      cloudformation:
+        stack_name: synthetics-base
+        template: ../cloudformation/synthetics-base.yaml
+
+    - name: Upload api-test-1 Canary
+      block:
+        - name: Create root canary folder
+          file:
+            path: ../api-test-1/dist/nodejs # must be called nodejs
+            state: directory
+        - name: Copy script metadata
+          copy:
+            src:  ../api-test-1/{{ item }}
+            dest: ../api-test-1/dist/nodejs/.
+          loop:
+            - package.json
+            - package-lock.json
+        - name: Install packages
+          command: npm ci
+          args:
+            chdir: ../api-test-1/dist/nodejs
+        - name: Copy Canary script to AWS Canary entrypoint path
+          copy:
+            src:  ../api-test-1/index.js
+            dest: ../api-test-1/dist/nodejs/node_modules/index.js
+        - name: Archive api-test-1
+          archive:
+            path: ../api-test-1/dist/nodejs
+            exclude_path:
+              - ../api-test-1/index.js
+            dest: ../api-test-1.zip
+            format: zip
+        - name: Generate S3 file key
+          set_fact:
+            s3_file_key: "api-test-1-{{ lookup('password', '/dev/null chars=ascii_letters,digits') | to_uuid }}.zip"
+        - name: Upload to S3
+          command:
+            aws s3 cp
+              ../api-test-1.zip
+              s3://cw-syn-code-{{ aws_account_id }}-{{ aws_region }}/{{ s3_file_key }}
+
+    - name: Deploy api-test-1 Canary
+      cloudformation:
+        stack_name: api-test-1
+        template: ../cloudformation/canary.yaml
+        template_parameters:
+          CanaryName: api-test-1
+          S3FileKey: "{{ s3_file_key }}"

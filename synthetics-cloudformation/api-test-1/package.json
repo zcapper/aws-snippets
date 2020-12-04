@@ -1,0 +1,16 @@
+{
+  "name": "api-test-1",
+  "version": "1.0.0",
+  "description": "A sample Canary API test script",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Zahav Capper",
+  "license": "MIT",
+  "dependencies": {
+    "aws-sdk": "^2.803.0",
+    "axios": "^0.21.0",
+    "winston": "^3.3.3"
+  }
+}

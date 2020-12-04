@@ -1,0 +1,56 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Parameters:
+  CanaryName:
+    Type: String
+    Default: my-canary
+    MaxLength: 21
+  S3FileKey:
+    Type: String
+
+Resources:
+  Canary:
+    Type: AWS::Synthetics::Canary
+    Properties: 
+      Name:
+        Fn::Sub: ${CanaryName}
+      Code:
+        Handler: index.handler
+        S3Bucket:
+          Fn::Sub: cw-syn-code-${AWS::AccountId}-${AWS::Region}
+        S3Key:
+          Ref: S3FileKey
+      ExecutionRoleArn:
+        Fn::Sub: arn:aws:iam::${AWS::AccountId}:role/CloudWatchSyntheticsRole-${AWS::Region}
+      RuntimeVersion: syn-nodejs-2.2
+      RunConfig:
+        TimeoutInSeconds: 60
+      ArtifactS3Location:
+        Fn::Sub: s3://cw-syn-results-${AWS::AccountId}-${AWS::Region}
+      StartCanaryAfterCreation: True
+      Schedule:
+        Expression: rate(1 minute) # every minute
+        DurationInSeconds: 0 # run indefinitely
+      SuccessRetentionPeriod: 90
+      FailureRetentionPeriod: 180
+
+  CanaryAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName:
+        Fn::Sub: canary-${CanaryName}
+      # AlarmActions:
+      #   - Ref: SNSTopicArn
+      Namespace: CloudWatchSynthetics
+      MetricName: SuccessPercent
+      Dimensions:
+        - Name: CanaryName
+          Value:
+            Ref: CanaryName
+      Period: 60
+      Statistic: Average
+      ComparisonOperator: LessThanOrEqualToThreshold
+      Threshold: 50
+      Unit: Percent
+      DatapointsToAlarm: 2
+      EvaluationPeriods: 3
