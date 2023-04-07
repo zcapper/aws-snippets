@@ -1,0 +1,29 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: |
+  Creates an ACM certificate. IMPORTANT: The ACM certifiacte must be manually verified before stack creation can complete.
+
+Parameters:
+  DomainName:
+    Description: Domain name for the website
+    Type: String
+  AcmValidationMethod:
+    Description: Validation method for the ACM certificate
+    Type: String
+    Default: 'DNS'
+    AllowedValues:
+      - 'DNS'
+      - 'EMAIL'
+
+Resources:
+  AcmCertificate:
+    Type: 'AWS::CertificateManager::Certificate'
+    Properties:
+      DomainName: !Ref DomainName
+      ValidationMethod: !Ref AcmValidationMethod
+      SubjectAlternativeNames:
+        - !Sub '*.${DomainName}'
+
+Outputs:
+  AcmCertificateArn:
+    Description: ARN of the created ACM certificate
+    Value: !Ref AcmCertificate
